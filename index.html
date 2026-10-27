@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Supermarket Thermal Bill</title>
+<style>
+*{box-sizing:border-box}
+:root{--ink:#111;--muted:#444;--line:#777}
+body{margin:0;background:#eceff1;color:var(--ink);font:12px/1.35 Arial,Helvetica,sans-serif}
+.toolbar{max-width:80mm;margin:14px auto;display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
+button{border:1px solid #222;border-radius:5px;padding:9px 12px;background:#111;color:#fff;font-weight:700;cursor:pointer}
+button.light{background:#fff;color:#111}
+.receipt{width:80mm;min-height:100mm;margin:0 auto 20px;background:white;padding:5mm 4mm;box-shadow:0 4px 18px #0002}
+.center{text-align:center}
+.firm-name{font-size:19px;font-weight:900;text-transform:uppercase;margin:0 0 4px;letter-spacing:.3px}
+.small{font-size:10px}
+.muted{color:var(--muted)}
+[contenteditable=true]{outline:none;border-radius:2px}
+[contenteditable=true]:focus,.edit:focus{background:#fff7cc}
+.topline{border-top:1px dashed var(--ink);margin:7px 0}
+.bill-heading{font-weight:900;font-size:15px;letter-spacing:1.5px;margin:6px 0}
+.meta{display:flex;justify-content:space-between;gap:5px;font-size:11px;margin:3px 0}
+.customer-line{margin:4px 0;display:flex;gap:5px}
+.customer-line label{white-space:nowrap;font-weight:bold}
+.customer-line [contenteditable]{flex:1;min-width:0;border-bottom:1px dotted #777}
+table{width:100%;border-collapse:collapse;table-layout:fixed;font-size:11px}
+th{border-bottom:1px solid #111;border-top:1px solid #111;padding:5px 2px;text-align:left}
+td{padding:4px 2px;vertical-align:top;border-bottom:1px dotted #bbb;overflow-wrap:anywhere}
+th:nth-child(1){width:45%} th:nth-child(2){width:13%;text-align:right} th:nth-child(3){width:19%;text-align:right} th:nth-child(4){width:23%;text-align:right}
+td:nth-child(2),td:nth-child(3),td:nth-child(4){text-align:right}
+.edit{width:100%;border:0;background:transparent;font:inherit;padding:2px 0;color:inherit;outline:none}
+.date-edit{width:31mm;min-width:31mm;text-align:right;border:0;border-bottom:1px dotted #777;padding:0;font-size:11px}
+.name-input{white-space:normal}
+.remove{border:0;background:transparent;color:#900;padding:0 2px;font-size:14px}
+.item-controls{display:flex;justify-content:space-between;align-items:center;margin:5px 0}
+.totals{margin-top:7px}
+.total{display:flex;justify-content:space-between;gap:8px;margin:4px 0}
+.total input{width:65px;text-align:right;border:0;border-bottom:1px dotted #555;font:inherit;background:transparent}
+.grand{font-size:16px;font-weight:900;border-top:2px solid #111;border-bottom:2px solid #111;padding:7px 0;margin-top:7px}
+.words{font-size:10px;margin-top:7px}
+.payment{margin-top:7px;font-size:11px}
+.footer{margin-top:10px;text-align:center;font-size:11px}
+.barcode{font-family:monospace;letter-spacing:3px;font-size:20px;font-weight:bold;margin:5px 0}
+@page{size:80mm auto;margin:0}
+@media print{
+ body{background:#fff}
+ .toolbar,.no-print,.remove{display:none!important}
+ .receipt{width:80mm;min-height:0;margin:0;padding:3mm 3mm;box-shadow:none}
+ [contenteditable=true]:focus,.edit:focus{background:transparent}
+ tr{break-inside:avoid}
+}
+@media screen and (max-width:500px){.receipt{width:100%;max-width:80mm}.toolbar{padding:0 8px}}
+</style>
+</head>
+<body>
+<div class="toolbar">
+<button onclick="addItem()">+ Add item</button>
+<button onclick="window.print()">Print thermal bill</button>
+<button class="light" onclick="newBill()">New bill</button>
+</div>
+<main class="receipt">
+<header class="center">
+<h1 class="firm-name" contenteditable="true">YOUR SUPERMARKET</h1>
+<div class="small" contenteditable="true">Address line, Town, PIN</div>
+<div class="small">Phone: <span contenteditable="true">+91 00000 00000</span></div>
+<div class="topline"></div>
+<div class="bill-heading">SALES BILL</div>
+</header>
+<div class="meta"><span>Bill No: <b contenteditable="true" id="billNo">SM-001</b></span><span>Date: <input id="billDate" class="edit date-edit" type="date" aria-label="Bill date"></span></div>
+<div class="meta"><span>Cashier: <span contenteditable="true">Counter 01</span></span><span>POS BILL</span></div>
+<div class="topline"></div>
+<div class="customer-line"><label>Customer:</label><span contenteditable="true" style="flex:1;min-width:0;border-bottom:1px dotted #777"></span></div>
+<div class="customer-line"><label>Phone:</label><span contenteditable="true" style="flex:1;min-width:0;border-bottom:1px dotted #777"></span></div>
+<table>
+<thead><tr><th>Item description</th><th>Qty</th><th>Rate ₹</th><th>Amount ₹</th></tr></thead>
+<tbody id="items"></tbody>
+</table>
+<div class="item-controls no-print"><span class="small muted">Enter item, quantity and rate</span><button class="light" onclick="addItem()">+ Item</button></div>
+<div class="topline"></div>
+<div class="totals">
+<div class="total"><span>Items count</span><b id="itemCount">0</b></div>
+<div class="total"><span>Subtotal</span><b id="subtotal">₹0.00</b></div>
+<div class="total"><label for="discount">Discount (₹)</label><input id="discount" type="number" min="0" step=".01" value="0" oninput="calculate()"></div>
+<div class="total grand"><span>NET TOTAL</span><b id="grandTotal">₹0.00</b></div>
+</div>
+<div class="words"><b>Amount in words:</b> <span id="words">Zero rupees only</span></div>
+<div class="topline"></div>
+<div class="payment"><b>Payment mode:</b> <span contenteditable="true">Cash / UPI / Card</span></div>
+<div class="payment"><b>Items once sold:</b> exchange/return as per store policy.</div>
+<footer class="footer">
+<div class="barcode">* THANK YOU *</div>
+<b contenteditable="true">THANK YOU FOR SHOPPING WITH US!</b>
+<div class="small">Please visit again</div>
+<div class="topline"></div>
+<div class="small">Computer-generated sales bill</div>
+</footer>
+</main>
+<script>
+const items=document.getElementById('items');
+function money(n){return '₹'+(Number(n)||0).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2})}
+function safe(s){return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+function addItem(name='',qty=1,rate=0){
+ const tr=document.createElement('tr');
+ tr.innerHTML=`<td><input class="edit" aria-label="Item" placeholder="Product name" value="${safe(name)}"></td>
+ <td><input class="edit qty" aria-label="Quantity" type="number" min="0" step="any" value="${qty}"></td>
+ <td><input class="edit rate" aria-label="Rate" type="number" min="0" step=".01" value="${rate}"></td>
+ <td><span class="amount">₹0.00</span> <button class="remove no-print" onclick="this.closest('tr').remove();calculate()" title="Remove">×</button></td>`;
+ items.appendChild(tr);tr.querySelectorAll('input').forEach(el=>el.addEventListener('input',calculate));calculate()
+}
+function words(n){
+ if(!n)return 'Zero';
+ const o=['','One','Two','Three','Four','Five','Six','Seven','Eight','Nine','Ten','Eleven','Twelve','Thirteen','Fourteen','Fifteen','Sixteen','Seventeen','Eighteen','Nineteen'],t=['','','Twenty','Thirty','Forty','Fifty','Sixty','Seventy','Eighty','Ninety'];
+ function part(x){let s='';if(x>=100){s+=o[Math.floor(x/100)]+' Hundred';x%=100;if(x)s+=' '}if(x>=20){s+=t[Math.floor(x/10)];x%=10;if(x)s+=' '+o[x]}else if(x)s+=o[x];return s}
+ let a=[];for(const [v,l] of [[10000000,'Crore'],[100000,'Lakh'],[1000,'Thousand'],[1,'']]){if(n>=v){let x=Math.floor(n/v);a.push(part(x)+(l?' '+l:''));n%=v}}return a.join(' ')
+}
+function calculate(){
+ let sub=0,count=0;
+ [...items.rows].forEach(tr=>{let q=+tr.querySelector('.qty').value||0,r=+tr.querySelector('.rate').value||0,a=q*r;sub+=a;if(q>0)count++;tr.querySelector('.amount').textContent=money(a)});
+ let d=Math.max(0,+document.getElementById('discount').value||0),total=Math.max(0,sub-d);
+ document.getElementById('itemCount').textContent=count;
+ document.getElementById('subtotal').textContent=money(sub);
+ document.getElementById('grandTotal').textContent=money(total);
+ document.getElementById('words').textContent=words(Math.round(total))+' rupees only';
+}
+function todayISO(){const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`}
+function newBill(){if(!confirm('Clear this bill and start a new one?'))return;items.innerHTML='';addItem();addItem();addItem();document.getElementById('discount').value=0;document.getElementById('billDate').value=todayISO();calculate()}
+document.getElementById('billDate').value=todayISO();
+addItem();addItem();addItem();
+</script>
+</body>
+</html>
